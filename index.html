@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>弹球小游戏</title>
+	<link rel="stylesheet" type="text/css" href="index.css">
+</head>
+<body>
+
+	<div id="wrap"></div>  <!-- 创建砖块区域 -->
+	<div id="ball"></div>      <!-- 弹球 -->
+	<div id="ejector"></div>		<!--发射板-->
+	<div id="score">0分</div>    <!--计分板-->
+	<div id="gameover">
+		<p>总分：66</p>
+		<span>继续挑战</span>
+	</div>
+
+<script type="text/javascript">
+/*分析：
+1.需要元素：小球，挡板，砖块区域，计分板，初始位置(x,y)
+2.行为：
+
+初始化砖块:
+在砖块区域创建砖块:creatBrick
+for循环生成多个砖块
+每一个砖块的初始位置,top,left
+
+初始化小球:
+小球宽度和高度
+小球x,y方向移动距离
+小球开始运动的事件
+初始化小球的位置：x,y
+
+初始化发射板:
+初始化发射板位置x,y
+发射板与鼠标监听
+发射板移动：发射板跟随鼠标x方向移动
+发射板移动范围：浏览器边框
+
+小球移动：
+api: requestAnimationFrame
+小球x,y自增
+
+小球碰撞弹回：
+小球和浏览器边框碰撞弹回
+小球和发射板碰撞
+小球和砖块碰撞：砖块移除*/
+
+var oBall=document.querySelector("#ball");    //弹球
+var oEjector=document.querySelector("#ejector");  //发射器
+var oScore=document.querySelector("#score");		//分数
+var oWrap=document.querySelector("#wrap");		//砖块区域
+var over=document.querySelector("#gameover");	//游戏结束
+
+function Breakout(ball,ejector,score,wrap,over){ //每一个对象，构造函数
+	this.ball=ball;
+	this.ejector=ejector;
+	this.scores=score;
+	this.wrap=wrap;
+	this.over=over;
+	this.x=0;
+	this.y=0;
+	this.score=0;
+}
+Breakout.prototype={  //原型
+	init:function(){		//初始化整个
+		this.ballStart();		//初始化小球
+		this.creatBrick();		//创建砖块
+		this.ejectorMove();		//发射板移动
+	},
+	creatBrick:function(){   //创建砖块
+		var distance=document.documentElement.offsetWidth;
+		var x=distance/2 - distance*.05;  //设置居中位置
+		w=45*2;		
+		h=15*2;
+		for(var i=1;i<=8;i++){  //8:砖块共8行
+			for(var j=0;j<i*2-1;j++){  //i*2-1:每一行砖块数按照13579...排列
+				var brick=document.createElement("div");
+				brick.style.top=(i-1)*h+"px";
+				brick.style.left=x-(i*w)+(j*w)+"px";
+				this.wrap.appendChild(brick);
+			}
+		}
+	},
+	ejectorMove:function(){   //发射板初始化
+		this.ejector.style.top=window.innerHeight-180+"px";
+		this.ejector.style.left=this.x-60+"px";
+		this.addEvent(document,"mousemove",this.mouseMove.bind(this));  //监听鼠标移动
+	},
+	ballStart:function(){  //小球初始化
+		var This=this;
+		this.y=window.innerHeight-200;  //初始化x位置，距离底部200px
+		this.x=window.innerWidth/2;  //初始化y位置，居中
+		this.ball.style.top=this.y+"px";  //初始化小球top值为y
+		this.ball.style.left=this.x+"px";  
+		this.ball.speed=10;  	
+		this.ball.width=15;		
+		this.ball.height=15;
+		document.onclick=function(){   //点击开始游戏，小球运动
+			This.ballMove(); 
+		}
+	},
+	mouseMove:function(e){   //鼠标移动，发射板移动
+		e=e||window.event;
+		var _left=e.pageX-this.ejector.offsetWidth/2;  //保证鼠标移动，发射板中间位置同步鼠标位置
+		_left=Math.min(window.innerWidth-this.ejector.offsetWidth,_left);     //发射板向右不能超过浏览器边界
+		_left=Math.max(0,_left);      //向左不超过边界
+		this.ejector.style.left=_left+"px";
+	},
+	ballMove:function(){     //小球开始运动后
+		document.onclick=null;   //清除点击事件，不然一点击就会重新开始，这里需要注意了
+		this.ball.xspeed=this.ball.speed; //初始化小球x方向运动速度，+为往左，-为往右
+		this.ball.yspeed=-this.ball.speed;//+往上-往下
+		function auto(){
+			this.x+=this.ball.xspeed;
+			this.y+=this.ball.yspeed;
+			this.crash();    //碰撞检测，可通过检测top,left值与边框的距离，来实现碰撞检测
+			this.ball.style.left=this.x+"px";
+			this.ball.style.top=this.y+"px";
+			requestAnimationFrame(auto.bind(this));  //原生js动画根据cpu运算速度来实现更新(告诉浏览器，你希望执行一个动画，并且要求浏览器在下次重绘之前调用指定的回调函数更新动画。该方法需要传入一个回调函数作为参数，该回调函数会在浏览器下一次重绘之前执行)
+		}
+		auto.call(this);
+	},
+	crash:function(){   //碰撞检测函数
+		var maxWidth=window.innerWidth-this.ball.offsetWidth;//浏览器左边界=浏览器宽度-球的宽度
+		var maxHeight=window.innerHeight-this.ball.offsetHeight;
+		if(this.y>=maxHeight){  //小球掉下去
+			this.gameOver();
+		}
+		if(this.x>=maxWidth){  //碰到右边墙壁
+			this.ball.xspeed*=-1;  //*-1,即往相反方向回弹
+			this.x=maxWidth;	//重置小球位置
+		}
+		if(this.x<0){  //碰到左边墙壁
+			this.ball.xspeed=this.ball.speed;
+			this.x=0;
+		}
+		if(this.y<0){  //碰到上面
+			this.ball.yspeed=this.ball.speed;
+			this.y=0;
+		}
+		//发射板碰撞检测，难点
+		if(Math.abs(this.x-(this.ejector.offsetLeft+(this.ejector.clientWidth/2)))<60&&Math.abs(this.y-this.ejector.offsetTop-30)<45){
+			var color=this.ranColor();
+			this.ejector.style.background=color;
+			this.ball.yspeed*=-1;
+			this.y=this.ejector.offsetTop-40;
+		}
+		//碰撞砖块后移除砖块
+		for(var i=this.wrap.children.length-1;i>=0;i--){
+			var ballMx=this.ball.offsetLeft+(this.ball.width/2);
+			var ballMy=this.ball.offsetTop+(this.ball.height/2);
+			var brickMx=(this.wrap.children[i].offsetLeft+this.wrap.offsetLeft)+(45/2);
+			var brickMy=(this.wrap.children[i].offsetTop+this.wrap.offsetTop)+(15/2);
+			if(Math.abs(ballMx-brickMx)<=45&&Math.abs(ballMy-brickMy)<=15){
+				this.ball.yspeed*=-1;
+				this.y=brickMy;
+				this.wrap.removeChild(this.wrap.children[i]);
+				if(this.wrap.children.length==0){
+					this.gameOver();
+				}
+				this.scoreChange();
+			}
+		}
+	},
+	scoreChange:function(){
+		this.score++;
+		this.scores.innerHTML=this.score+"分";
+	},
+	gameOver:function(){
+		this.over.style.display="block";
+		this.over.children[0].innerHTML="总分:"+this.score;
+		var all=document.querySelectorAll("*");
+		for(var i=0;i<all.length;i++){
+			all[i].style.cursor="auto";
+		}
+		this.ejector.style.display="none";
+		this.ball.style.display="none";
+		this.over.children[1].onclick=function(){
+			window.location.reload();
+		}
+	},
+	/*    getStyle: function (ele, curr) {  //获取属性值  
+         return ele.currentStyle ? parseInt(ele.currentStyle[curr]) : parseInt(getComputedStyle(ele, null)[curr]);  
+         },*/
+         addEvent:function(element,e,fn){
+         	return element.attachEvent?element.attachEvent("on"+e,fn):element.addEventListener(e,fn,false);
+         },
+         ranColor:function(){
+         	var color="#";
+         	var arr=["0","1","2","3","4","5","6","7","8","9","a","b","c","d","e","f"];
+         	for(var i=0;i<6;i++){
+         		var num=parseInt(Math.random()*16);
+         		color+=arr[num];
+         	}
+         	return color;
+         },
+}
+	var breakout=new Breakout(oBall,oEjector,oScore,oWrap,over);
+	breakout.init();
+</script>    
+</body>
+</html>
